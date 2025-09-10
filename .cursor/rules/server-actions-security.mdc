@@ -1,0 +1,336 @@
+---
+globs: **/actions/**/*.ts,**/lib/actions/**/*.ts
+---
+
+# Server Actions Security Rules
+
+Server Actions must implement proper authentication and data validation.
+
+## 🔐 Required Security Pattern for ALL Server Actions
+
+```typescript
+"use server";
+
+import { auth } from "@clerk/nextjs/server";
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { db } from "@/db";
+import { decksTable, cardsTable } from "@/db/schema";
+import { eq, and } from "drizzle-orm";
+
+export async function createDeck(formData: FormData) {
+  // 1. ALWAYS authenticate first
+  const { userId } = await auth();
+  if (!userId) {
+    redirect("/sign-in");
+  }
+
+  // 2. Validate and sanitize input
+  const title = formData.get("title") as string;
+  const description = formData.get("description") as string;
+
+  if (!title || title.trim().length === 0) {
+    throw new Error("Title is required");
+  }
+
+  try {
+    // 3. Perform secure database operation
+    const [deck] = await db
+      .insert(decksTable)
+      .values({
+        title: title.trim(),
+        description: description?.trim() || null,
+        userId, // Critical: Always set the authenticated user
+      })
+      .returning();
+
+    // 4. Revalidate and redirect
+    revalidatePath("/dashboard");
+    redirect(`/decks/${deck.id}`);
+  } catch (error) {
+    console.error("Failed to create deck:", error);
+    throw new Error("Failed to create deck");
+  }
+}
+```
+
+## Common Server Action Security Patterns
+
+### Deck Management Actions
+
+```typescript
+// ✅ Update deck with ownership verification
+export async function updateDeck(deckId: number, formData: FormData) {
+  const { userId } = await auth();
+  if (!userId) {
+    redirect("/sign-in");
+  }
+
+  const title = formData.get("title") as string;
+  if (!title?.trim()) {
+    throw new Error("Title is required");
+  }
+
+  const result = await db
+    .update(decksTable)
+    .set({
+      title: title.trim(),
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(decksTable.id, deckId),
+        eq(decksTable.userId, userId) // Critical: ownership verification
+      )
+    );
+
+  if (result.rowCount === 0) {
+    throw new Error("Deck not found or access denied");
+  }
+
+  revalidatePath(`/decks/${deckId}`);
+}
+
+// ✅ Delete deck with ownership verification
+export async function deleteDeck(deckId: number) {
+  const { userId } = await auth();
+  if (!userId) {
+    redirect("/sign-in");
+  }
+
+  const result = await db.delete(decksTable).where(
+    and(
+      eq(decksTable.id, deckId),
+      eq(decksTable.userId, userId) // Critical: ownership verification
+    )
+  );
+
+  if (result.rowCount === 0) {
+    throw new Error("Deck not found or access denied");
+  }
+
+  revalidatePath("/dashboard");
+  redirect("/dashboard");
+}
+```
+
+### Card Management Actions
+
+```typescript
+// ✅ Create card with deck ownership verification
+export async function createCard(deckId: number, formData: FormData) {
+  const { userId } = await auth();
+  if (!userId) {
+    redirect("/sign-in");
+  }
+
+  // First verify user owns the deck
+  const deck = await db
+    .select()
+    .from(decksTable)
+    .where(and(eq(decksTable.id, deckId), eq(decksTable.userId, userId)))
+    .limit(1);
+
+  if (!deck.length) {
+    throw new Error("Deck not found or access denied");
+  }
+
+  const front = formData.get("front") as string;
+  const back = formData.get("back") as string;
+
+  if (!front?.trim() || !back?.trim()) {
+    throw new Error("Both front and back are required");
+  }
+
+  await db.insert(cardsTable).values({
+    deckId,
+    front: front.trim(),
+    back: back.trim(),
+  });
+
+  revalidatePath(`/decks/${deckId}`);
+}
+
+// ✅ Update card with deck ownership verification
+export async function updateCard(cardId: number, formData: FormData) {
+  const { userId } = await auth();
+  if (!userId) {
+    redirect("/sign-in");
+  }
+
+  // Verify user owns the deck containing this card
+  const cardWithDeck = await db
+    .select({
+      cardId: cardsTable.id,
+      deckUserId: decksTable.userId,
+    })
+    .from(cardsTable)
+    .innerJoin(decksTable, eq(cardsTable.deckId, decksTable.id))
+    .where(eq(cardsTable.id, cardId))
+    .limit(1);
+
+  if (!cardWithDeck.length || cardWithDeck[0].deckUserId !== userId) {
+    throw new Error("Card not found or access denied");
+  }
+
+  const front = formData.get("front") as string;
+  const back = formData.get("back") as string;
+
+  if (!front?.trim() || !back?.trim()) {
+    throw new Error("Both front and back are required");
+  }
+
+  await db
+    .update(cardsTable)
+    .set({
+      front: front.trim(),
+      back: back.trim(),
+      updatedAt: new Date(),
+    })
+    .where(eq(cardsTable.id, cardId));
+
+  revalidatePath(`/cards/${cardId}`);
+}
+```
+
+### Batch Operations with Security
+
+```typescript
+// ✅ Bulk operations with ownership verification
+export async function bulkDeleteCards(cardIds: number[]) {
+  const { userId } = await auth();
+  if (!userId) {
+    redirect("/sign-in");
+  }
+
+  if (!cardIds.length) {
+    throw new Error("No cards selected");
+  }
+
+  // Verify all cards belong to user's decks
+  const cardsWithDecks = await db
+    .select({
+      cardId: cardsTable.id,
+      deckUserId: decksTable.userId,
+    })
+    .from(cardsTable)
+    .innerJoin(decksTable, eq(cardsTable.deckId, decksTable.id))
+    .where(inArray(cardsTable.id, cardIds));
+
+  const unauthorizedCards = cardsWithDecks.filter(
+    (card) => card.deckUserId !== userId
+  );
+
+  if (unauthorizedCards.length > 0) {
+    throw new Error("Some cards do not belong to you");
+  }
+
+  if (cardsWithDecks.length !== cardIds.length) {
+    throw new Error("Some cards not found");
+  }
+
+  await db.delete(cardsTable).where(inArray(cardsTable.id, cardIds));
+
+  revalidatePath("/dashboard");
+}
+```
+
+### Input Validation Helpers
+
+```typescript
+// ✅ Reusable validation functions
+function validateDeckInput(formData: FormData) {
+  const title = formData.get("title") as string;
+  const description = formData.get("description") as string;
+
+  if (!title?.trim()) {
+    throw new Error("Title is required");
+  }
+
+  if (title.length > 255) {
+    throw new Error("Title must be 255 characters or less");
+  }
+
+  return {
+    title: title.trim(),
+    description: description?.trim() || null,
+  };
+}
+
+function validateCardInput(formData: FormData) {
+  const front = formData.get("front") as string;
+  const back = formData.get("back") as string;
+
+  if (!front?.trim()) {
+    throw new Error("Question side is required");
+  }
+
+  if (!back?.trim()) {
+    throw new Error("Answer side is required");
+  }
+
+  if (front.length > 1000) {
+    throw new Error("Question is too long");
+  }
+
+  if (back.length > 1000) {
+    throw new Error("Answer is too long");
+  }
+
+  return {
+    front: front.trim(),
+    back: back.trim(),
+  };
+}
+```
+
+## ❌ Server Action Security Anti-Patterns
+
+```typescript
+// ❌ NEVER skip authentication
+export async function unsafeCreateDeck(formData: FormData) {
+  // Missing auth check!
+  const title = formData.get("title") as string;
+  await db.insert(decksTable).values({ title });
+}
+
+// ❌ NEVER trust client-provided user IDs
+export async function unsafeAction(formData: FormData) {
+  const userId = formData.get("userId") as string; // Dangerous!
+  const title = formData.get("title") as string;
+
+  await db.insert(decksTable).values({ title, userId });
+}
+
+// ❌ NEVER skip ownership verification
+export async function unsafeDeleteDeck(deckId: number) {
+  const { userId } = await auth();
+
+  // Missing ownership check - could delete anyone's deck!
+  await db.delete(decksTable).where(eq(decksTable.id, deckId));
+}
+
+// ❌ NEVER skip input validation
+export async function unsafeUpdateCard(cardId: number, formData: FormData) {
+  const { userId } = await auth();
+
+  // No validation - could insert malicious content!
+  const front = formData.get("front") as string;
+  const back = formData.get("back") as string;
+
+  await db
+    .update(cardsTable)
+    .set({ front, back })
+    .where(eq(cardsTable.id, cardId));
+}
+```
+
+## Security Checklist for Server Actions
+
+- [ ] Authentication verified at the start of every action
+- [ ] Input validation and sanitization implemented
+- [ ] Ownership verification for all data operations
+- [ ] Proper error handling that doesn't leak sensitive info
+- [ ] Appropriate revalidation and redirects
+- [ ] Rate limiting considerations for sensitive operations
+- [ ] Logging for security events (failed access attempts)

@@ -1,0 +1,63 @@
+---
+globs: *.tsx
+description: Guidelines for using shadcn/ui components
+---
+
+# shadcn/ui Component Guidelines
+
+## Installation & Usage
+
+- Install components using: `npx shadcn@latest add [component-name]`
+- Components are installed to `@/components/ui/` directory
+- Always use the configured aliases: `@/components`, `@/lib/utils`, `@/ui`
+
+## Component Patterns
+
+```tsx
+// Import shadcn components from @/components/ui
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+
+// Use class variance authority (cva) for component variants
+import { cva, type VariantProps } from "class-variance-authority";
+
+const buttonVariants = cva("base-classes", {
+  variants: {
+    variant: {
+      default: "bg-primary text-primary-foreground",
+      destructive: "bg-destructive text-destructive-foreground",
+    },
+    size: {
+      default: "h-10 px-4 py-2",
+      sm: "h-9 rounded-md px-3",
+    },
+  },
+  defaultVariants: {
+    variant: "default",
+    size: "default",
+  },
+});
+```
+
+## Styling Utilities
+
+```tsx
+import { cn } from "@/lib/utils"
+
+// Use cn() to merge Tailwind classes conditionally
+<div className={cn(
+  "base-classes",
+  variant === "primary" && "text-primary",
+  className
+)}>
+```
+
+## Best Practices
+
+- Use shadcn components as building blocks for custom components
+- Customize components by modifying CSS variables in `globals.css`
+- Use Lucide icons consistently: `import { IconName } from "lucide-react"`
+- Follow the New York style conventions (configured in components.json)
+- Prefer composition over customization for complex components
+- Always use `forwardRef` for components that need DOM refs

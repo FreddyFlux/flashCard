@@ -1,0 +1,177 @@
+---
+globs: **/db/**/*.ts,**/lib/**/*.ts
+---
+
+# Database Security Rules
+
+All database operations must enforce user data isolation.
+
+## 🔍 Required Imports for Secure Database Operations
+
+```typescript
+import { auth } from "@clerk/nextjs/server";
+import { db } from "@/db";
+import { decksTable, cardsTable } from "@/db/schema";
+import { eq, and } from "drizzle-orm";
+```
+
+## Secure Database Query Patterns
+
+### User Authentication Helper
+
+```typescript
+// ✅ Create reusable auth helper
+export async function getAuthenticatedUser() {
+  const { userId } = await auth();
+  if (!userId) {
+    throw new Error("Unauthorized");
+  }
+  return userId;
+}
+```
+
+### Deck Operations
+
+```typescript
+// ✅ Get user's decks only
+export async function getUserDecks(userId: string) {
+  return await db
+    .select()
+    .from(decksTable)
+    .where(eq(decksTable.userId, userId));
+}
+
+// ✅ Get specific deck with ownership verification
+export async function getUserDeck(deckId: number, userId: string) {
+  const deck = await db
+    .select()
+    .from(decksTable)
+    .where(and(eq(decksTable.id, deckId), eq(decksTable.userId, userId)))
+    .limit(1);
+
+  return deck[0] || null;
+}
+
+// ✅ Create deck with proper ownership
+export async function createDeck(data: {
+  title: string;
+  description?: string;
+  userId: string;
+}) {
+  return await db.insert(decksTable).values(data).returning();
+}
+```
+
+### Card Operations (Through Deck Ownership)
+
+```typescript
+// ✅ Get cards for user's deck
+export async function getDeckCards(deckId: number, userId: string) {
+  // First verify deck ownership
+  const deck = await getUserDeck(deckId, userId);
+  if (!deck) {
+    throw new Error("Deck not found or access denied");
+  }
+
+  // Now safe to get cards
+  return await db
+    .select()
+    .from(cardsTable)
+    .where(eq(cardsTable.deckId, deckId));
+}
+
+// ✅ Create card in user's deck
+export async function createCard(
+  data: {
+    deckId: number;
+    front: string;
+    back: string;
+  },
+  userId: string
+) {
+  // Verify deck ownership first
+  const deck = await getUserDeck(data.deckId, userId);
+  if (!deck) {
+    throw new Error("Deck not found or access denied");
+  }
+
+  return await db.insert(cardsTable).values(data).returning();
+}
+```
+
+### Advanced Security Patterns
+
+```typescript
+// ✅ Batch operations with security
+export async function bulkUpdateUserDecks(
+  updates: Array<{ id: number; title: string }>,
+  userId: string
+) {
+  const results = [];
+
+  for (const update of updates) {
+    const result = await db
+      .update(decksTable)
+      .set({ title: update.title })
+      .where(
+        and(
+          eq(decksTable.id, update.id),
+          eq(decksTable.userId, userId) // Always verify ownership
+        )
+      );
+    results.push(result);
+  }
+
+  return results;
+}
+
+// ✅ Join queries with security
+export async function getDecksWithCardCounts(userId: string) {
+  return await db
+    .select({
+      id: decksTable.id,
+      title: decksTable.title,
+      description: decksTable.description,
+      cardCount: count(cardsTable.id),
+    })
+    .from(decksTable)
+    .leftJoin(cardsTable, eq(decksTable.id, cardsTable.deckId))
+    .where(eq(decksTable.userId, userId)) // Critical: user filter
+    .groupBy(decksTable.id);
+}
+```
+
+## ❌ Database Anti-Patterns
+
+```typescript
+// ❌ NEVER query without user context
+export async function getAllDecks() {
+  return await db.select().from(decksTable); // Exposes all users' data!
+}
+
+// ❌ NEVER trust external IDs without verification
+export async function updateDeck(deckId: number, title: string) {
+  return await db
+    .update(decksTable)
+    .set({ title })
+    .where(eq(decksTable.id, deckId)); // Missing userId check!
+}
+
+// ❌ NEVER skip ownership verification in joins
+export async function getDeckWithCards(deckId: number) {
+  return await db
+    .select()
+    .from(decksTable)
+    .leftJoin(cardsTable, eq(decksTable.id, cardsTable.deckId))
+    .where(eq(decksTable.id, deckId)); // Missing userId verification!
+}
+```
+
+## Security Checklist for Database Operations
+
+- [ ] User authentication verified before any operation
+- [ ] All queries filtered by authenticated user's ID
+- [ ] Ownership verification for deck access
+- [ ] No direct card access without deck ownership check
+- [ ] Proper error handling that doesn't leak data
+- [ ] All mutations include user context

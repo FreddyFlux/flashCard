@@ -1,0 +1,165 @@
+---
+alwaysApply: true
+description: Database interactions must always use Drizzle ORM schema and queries
+---
+
+# Database Interactions with Drizzle ORM
+
+ALL database interactions MUST use the Drizzle ORM schema and queries. Never write raw SQL or use other database libraries.
+
+## Database Setup
+
+- Database connection: [src/db/index.ts](mdc:src/db/index.ts)
+- Schema definitions: [src/db/schema.ts](mdc:src/db/schema.ts)
+- Configuration: [drizzle.config.ts](mdc:drizzle.config.ts)
+
+## Required Imports
+
+Always import the database connection and relevant schema:
+
+```typescript
+import { db } from "@/db";
+import { decksTable, cardsTable } from "@/db/schema";
+```
+
+## Query Patterns
+
+### SELECT Operations
+
+```typescript
+// Single record by ID
+const deck = await db
+  .select()
+  .from(decksTable)
+  .where(eq(decksTable.id, deckId));
+
+// Multiple records with conditions
+const userDecks = await db
+  .select()
+  .from(decksTable)
+  .where(eq(decksTable.userId, userId));
+
+// With relations
+const deckWithCards = await db.query.decksTable.findFirst({
+  where: eq(decksTable.id, deckId),
+  with: {
+    cards: true,
+  },
+});
+```
+
+### INSERT Operations
+
+```typescript
+// Single insert
+const [newDeck] = await db
+  .insert(decksTable)
+  .values({
+    userId,
+    title,
+    description,
+  })
+  .returning();
+
+// Multiple inserts
+const newCards = await db
+  .insert(cardsTable)
+  .values([
+    { deckId, front: "Question 1", back: "Answer 1" },
+    { deckId, front: "Question 2", back: "Answer 2" },
+  ])
+  .returning();
+```
+
+### UPDATE Operations
+
+```typescript
+// Update with conditions
+const [updatedDeck] = await db
+  .update(decksTable)
+  .set({ title, description, updatedAt: new Date() })
+  .where(eq(decksTable.id, deckId))
+  .returning();
+```
+
+### DELETE Operations
+
+```typescript
+// Delete with conditions
+await db.delete(cardsTable).where(eq(cardsTable.deckId, deckId));
+await db.delete(decksTable).where(eq(decksTable.id, deckId));
+```
+
+## Schema Reference
+
+### Available Tables
+
+- `decksTable`: User flashcard decks
+- `cardsTable`: Individual flashcards within decks
+
+### Relations
+
+- Use `db.query.decksTable.findFirst/findMany` for automatic joins
+- Relations are defined in [src/db/schema.ts](mdc:src/db/schema.ts)
+
+## Required Operators
+
+Always import necessary operators from drizzle-orm:
+
+```typescript
+import {
+  eq,
+  and,
+  or,
+  not,
+  isNull,
+  isNotNull,
+  gt,
+  lt,
+  gte,
+  lte,
+} from "drizzle-orm";
+```
+
+## Error Handling
+
+Wrap database operations in try-catch blocks:
+
+```typescript
+try {
+  const result = await db.select().from(decksTable);
+  return result;
+} catch (error) {
+  console.error("Database error:", error);
+  throw new Error("Failed to fetch decks");
+}
+```
+
+## TypeScript Types
+
+Use inferred types from schema:
+
+```typescript
+import type { InferSelectModel, InferInsertModel } from "drizzle-orm";
+
+export type Deck = InferSelectModel<typeof decksTable>;
+export type NewDeck = InferInsertModel<typeof decksTable>;
+export type Card = InferSelectModel<typeof cardsTable>;
+export type NewCard = InferInsertModel<typeof cardsTable>;
+```
+
+## Forbidden Practices
+
+❌ **Never use:**
+
+- Raw SQL queries
+- Other ORM libraries (Prisma, Sequelize, etc.)
+- Direct database client calls
+- String concatenation for queries
+
+✅ **Always use:**
+
+- Drizzle schema definitions from [src/db/schema.ts](mdc:src/db/schema.ts)
+- Type-safe query builders
+- Proper operator functions (eq, and, or, etc.)
+- The db instance from [src/db/index.ts](mdc:src/db/index.ts)

@@ -1,0 +1,250 @@
+---
+globs: **/components/**/*.tsx,**/app/**/*.tsx
+---
+
+# Component Security Rules
+
+Components must handle user data securely and never expose unauthorized data.
+
+## 🛡️ Client-Side Security Principles
+
+### Authentication State Handling
+
+```typescript
+import { useAuth, useUser } from "@clerk/nextjs";
+
+// ✅ Always check auth state in components
+function MyComponent() {
+  const { isLoaded, userId } = useAuth();
+  const { user } = useUser();
+
+  if (!isLoaded) {
+    return <div>Loading...</div>;
+  }
+
+  if (!userId) {
+    return <div>Please sign in</div>;
+  }
+
+  // Safe to render user data
+  return <UserDashboard />;
+}
+```
+
+### Server Components Authentication
+
+```typescript
+import { auth } from "@clerk/nextjs/server";
+
+// ✅ Server component with proper auth check
+export default async function ServerComponent() {
+  const { userId } = await auth();
+
+  if (!userId) {
+    redirect("/sign-in");
+  }
+
+  // Now safe to fetch user-specific data
+  const userDecks = await getUserDecks(userId);
+
+  return <DeckList decks={userDecks} />;
+}
+```
+
+### Data Fetching Security Patterns
+
+```typescript
+// ✅ Secure data fetching with error handling
+async function fetchUserDecks() {
+  try {
+    const response = await fetch("/api/decks");
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        // Handle unauthorized - redirect to login
+        redirect("/sign-in");
+      }
+      throw new Error("Failed to fetch decks");
+    }
+
+    return response.json();
+  } catch (error) {
+    console.error("Error fetching decks:", error);
+    // Show user-friendly error, don't leak details
+    throw new Error("Unable to load your decks");
+  }
+}
+```
+
+### Form Security Patterns
+
+```typescript
+// ✅ Secure form handling
+function CreateDeckForm() {
+  const { userId } = useAuth();
+
+  const handleSubmit = async (formData: FormData) => {
+    if (!userId) {
+      toast.error("Please sign in to create a deck");
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/decks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: formData.get("title"),
+          description: formData.get("description"),
+          // Don't send userId - server will get it from auth
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to create deck");
+      }
+
+      const deck = await response.json();
+      toast.success("Deck created successfully");
+    } catch (error) {
+      toast.error("Failed to create deck");
+    }
+  };
+
+  return <form action={handleSubmit}>{/* form fields */}</form>;
+}
+```
+
+## Component Data Protection Patterns
+
+### List Components
+
+```typescript
+// ✅ Only show user's own data
+function DeckList({ decks }: { decks: UserDeck[] }) {
+  const { userId } = useAuth();
+
+  // Additional client-side verification (defense in depth)
+  const userDecks = decks.filter((deck) => deck.userId === userId);
+
+  return (
+    <div>
+      {userDecks.map((deck) => (
+        <DeckCard key={deck.id} deck={deck} />
+      ))}
+    </div>
+  );
+}
+```
+
+### Detail Components
+
+```typescript
+// ✅ Verify ownership before showing details
+function DeckDetails({ deckId }: { deckId: number }) {
+  const { userId } = useAuth();
+  const [deck, setDeck] = useState<Deck | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!userId) return;
+
+    async function loadDeck() {
+      try {
+        const response = await fetch(`/api/decks/${deckId}`);
+
+        if (response.status === 404) {
+          setError("Deck not found");
+          return;
+        }
+
+        if (!response.ok) {
+          throw new Error("Failed to load deck");
+        }
+
+        const deckData = await response.json();
+        setDeck(deckData);
+      } catch (err) {
+        setError("Unable to load deck");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadDeck();
+  }, [deckId, userId]);
+
+  if (loading) return <div>Loading...</div>;
+  if (error) return <div>Error: {error}</div>;
+  if (!deck) return <div>Deck not found</div>;
+
+  return <DeckContent deck={deck} />;
+}
+```
+
+### Route Protection
+
+```typescript
+// ✅ Protected route wrapper
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { isLoaded, userId } = useAuth();
+
+  if (!isLoaded) {
+    return <div>Loading...</div>;
+  }
+
+  if (!userId) {
+    redirect("/sign-in");
+  }
+
+  return <>{children}</>;
+}
+```
+
+## ❌ Component Security Anti-Patterns
+
+```typescript
+// ❌ NEVER skip auth checks in components
+function UnsafeComponent({ deckId }: { deckId: number }) {
+  const [deck, setDeck] = useState();
+
+  // Missing auth check - anyone could access any deck!
+  useEffect(() => {
+    fetch(`/api/decks/${deckId}`)
+      .then((res) => res.json())
+      .then(setDeck);
+  }, [deckId]);
+}
+
+// ❌ NEVER trust props without verification
+function UnsafeList({ allUserDecks }: { allUserDecks: Deck[] }) {
+  // Displaying all decks without filtering - security risk!
+  return (
+    <div>
+      {allUserDecks.map((deck) => (
+        <DeckCard key={deck.id} deck={deck} />
+      ))}
+    </div>
+  );
+}
+
+// ❌ NEVER expose sensitive data in error messages
+function BadErrorHandling() {
+  try {
+    // some operation
+  } catch (error) {
+    // Don't expose internal errors to users
+    toast.error(error.message); // Could leak sensitive info
+  }
+}
+```
+
+## Security Checklist for Components
+
+- [ ] Authentication state checked before rendering user data
+- [ ] All API calls handle authentication errors appropriately
+- [ ] No sensitive data exposed in error messages
+- [ ] Client-side data filtering as defense in depth
+- [ ] Loading and error states handled securely
+- [ ] No direct access to other users' data paths

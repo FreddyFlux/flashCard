@@ -1,0 +1,84 @@
+---
+globs: *.tsx,*.ts
+description: Next.js App Router conventions and best practices
+---
+
+# Next.js App Router Conventions
+
+## File-based Routing
+
+- `page.tsx` - Creates a route segment
+- `layout.tsx` - Shared UI for a segment and its children
+- `loading.tsx` - Loading UI for a segment
+- `error.tsx` - Error UI for a segment
+- `not-found.tsx` - Not found UI for a segment
+- `route.ts` - API route handlers
+
+## Component Patterns
+
+### Server Components (Default)
+
+```tsx
+// Server components run on the server
+export default async function ServerComponent() {
+  const data = await fetch("...");
+  return <div>{/* Render data */}</div>;
+}
+```
+
+### Client Components
+
+```tsx
+"use client";
+
+// Use for interactivity, hooks, browser APIs
+import { useState } from "react";
+
+export default function ClientComponent() {
+  const [state, setState] = useState("");
+  return <button onClick={() => setState("clicked")}>Click</button>;
+}
+```
+
+## Data Fetching
+
+```tsx
+// Server Components - fetch directly
+async function getData() {
+  const res = await fetch("https://api.example.com/data");
+  if (!res.ok) throw new Error("Failed to fetch data");
+  return res.json();
+}
+
+export default async function Page() {
+  const data = await getData();
+  return <div>{data.title}</div>;
+}
+```
+
+## Metadata
+
+```tsx
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Page Title",
+  description: "Page description",
+};
+
+// Or dynamic metadata
+export async function generateMetadata({ params }): Promise<Metadata> {
+  return {
+    title: `Dynamic title for ${params.id}`,
+  };
+}
+```
+
+## Best Practices
+
+- Use Server Components by default, add 'use client' only when needed
+- Prefer async/await in Server Components for data fetching
+- Use proper TypeScript types for params and searchParams
+- Implement error boundaries with error.tsx
+- Use loading.tsx for loading states
+- Follow the App Router file conventions strictly

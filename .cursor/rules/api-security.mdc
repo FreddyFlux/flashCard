@@ -1,0 +1,129 @@
+---
+globs: **/api/**/*.ts,**/api/**/*.tsx
+---
+
+# API Route Security Rules
+
+All API routes must implement proper authentication and authorization.
+
+## 🔒 Required Security Pattern for ALL API Routes
+
+```typescript
+import { auth } from "@clerk/nextjs/server";
+import { db } from "@/db";
+import { decksTable, cardsTable } from "@/db/schema";
+import { eq, and } from "drizzle-orm";
+
+export async function GET/POST/PUT/DELETE() {
+  // 1. ALWAYS check authentication first
+  const { userId } = await auth();
+  if (!userId) {
+    return new Response("Unauthorized", { status: 401 });
+  }
+
+  try {
+    // 2. Your secure logic here - always filter by userId
+
+  } catch (error) {
+    console.error("API Error:", error);
+    return new Response("Internal Server Error", { status: 500 });
+  }
+}
+```
+
+## Common API Security Patterns
+
+### Creating Data
+
+```typescript
+// ✅ Always set userId when creating decks
+const newDeck = await db
+  .insert(decksTable)
+  .values({
+    title,
+    description,
+    userId, // Critical: Set the owner
+  })
+  .returning();
+```
+
+### Reading Data
+
+```typescript
+// ✅ Always filter by userId
+const userDecks = await db
+  .select()
+  .from(decksTable)
+  .where(eq(decksTable.userId, userId));
+```
+
+### Updating Data
+
+```typescript
+// ✅ Always verify ownership before updating
+const result = await db
+  .update(decksTable)
+  .set({ title: newTitle })
+  .where(
+    and(
+      eq(decksTable.id, deckId),
+      eq(decksTable.userId, userId) // Critical: ownership check
+    )
+  );
+
+if (result.rowCount === 0) {
+  return new Response("Not found or unauthorized", { status: 404 });
+}
+```
+
+### Deleting Data
+
+```typescript
+// ✅ Always verify ownership before deleting
+const result = await db.delete(decksTable).where(
+  and(
+    eq(decksTable.id, deckId),
+    eq(decksTable.userId, userId) // Critical: ownership check
+  )
+);
+```
+
+### Accessing Cards Through Decks
+
+```typescript
+// ✅ CORRECT: First verify deck ownership
+const deck = await db
+  .select()
+  .from(decksTable)
+  .where(and(eq(decksTable.id, deckId), eq(decksTable.userId, userId)))
+  .limit(1);
+
+if (!deck.length) {
+  return new Response("Deck not found", { status: 404 });
+}
+
+// Now safe to query/modify cards
+const cards = await db
+  .select()
+  .from(cardsTable)
+  .where(eq(cardsTable.deckId, deckId));
+```
+
+## ❌ Security Anti-Patterns to AVOID
+
+```typescript
+// ❌ NEVER query without user verification
+const deck = await db
+  .select()
+  .from(decksTable)
+  .where(eq(decksTable.id, deckId));
+
+// ❌ NEVER trust client-provided userId
+const userDecks = await db
+  .select()
+  .from(decksTable)
+  .where(eq(decksTable.userId, request.body.userId)); // Dangerous!
+
+// ❌ NEVER skip ownership verification for updates/deletes
+await db.delete(decksTable).where(eq(decksTable.id, deckId)); // Dangerous!
+```

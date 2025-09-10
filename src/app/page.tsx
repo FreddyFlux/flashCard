@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { SignedIn, SignedOut } from "@clerk/nextjs";
 
 export default function Home() {
   return (
@@ -12,6 +13,35 @@ export default function Home() {
           height={38}
           priority
         />
+
+        {/* Authentication Status Section */}
+        <div className="text-center sm:text-left">
+          <SignedOut>
+            <div className="bg-blue-100 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 max-w-md">
+              <h2 className="text-lg font-semibold text-blue-800 dark:text-blue-200 mb-2">
+                Welcome! 👋
+              </h2>
+              <p className="text-blue-700 dark:text-blue-300 text-sm">
+                You&apos;re not signed in. Click the &quot;Sign In&quot; or
+                &quot;Sign Up&quot; button above to get started with Clerk
+                authentication.
+              </p>
+            </div>
+          </SignedOut>
+
+          <SignedIn>
+            <div className="bg-green-100 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 max-w-md">
+              <h2 className="text-lg font-semibold text-green-800 dark:text-green-200 mb-2">
+                Welcome back! 🎉
+              </h2>
+              <p className="text-green-700 dark:text-green-300 text-sm">
+                You&apos;re successfully signed in with Clerk! Check out your
+                profile by clicking the user button in the header.
+              </p>
+            </div>
+          </SignedIn>
+        </div>
+
         <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
           <li className="mb-2 tracking-[-.01em]">
             Get started by editing{" "}

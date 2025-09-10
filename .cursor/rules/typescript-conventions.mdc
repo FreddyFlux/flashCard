@@ -1,0 +1,102 @@
+---
+globs: *.ts,*.tsx
+description: TypeScript conventions and patterns for this project
+---
+
+# TypeScript Conventions
+
+## Import/Export Patterns
+
+```tsx
+// Use type-only imports where possible
+import type { Metadata } from "next";
+import type { FC, ReactNode } from "react";
+
+// Default exports for page components
+export default function HomePage() {}
+
+// Named exports for utilities and hooks
+export const utility = () => {};
+export { namedExport } from "./module";
+```
+
+## Component Types
+
+```tsx
+// Props interfaces
+interface ButtonProps {
+  children: ReactNode;
+  variant?: "primary" | "secondary";
+  onClick?: () => void;
+}
+
+// Component with forwardRef
+interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
+  label?: string;
+}
+
+const Input = forwardRef<HTMLInputElement, InputProps>(
+  ({ className, label, ...props }, ref) => {
+    return (
+      <input ref={ref} className={cn("base-classes", className)} {...props} />
+    );
+  }
+);
+Input.displayName = "Input";
+```
+
+## Next.js Specific Types
+
+```tsx
+// Page props
+interface PageProps {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}
+
+// Layout props
+interface LayoutProps {
+  children: ReactNode;
+  params: Promise<{ segment: string }>;
+}
+
+// API route handlers
+interface RouteContext {
+  params: Promise<{ id: string }>;
+}
+
+export async function GET(request: Request, context: RouteContext) {}
+```
+
+## Utility Types
+
+```tsx
+// Use built-in utility types
+type Optional<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>>;
+type RequiredKeys<T> = Required<T>;
+
+// shadcn/ui pattern with VariantProps
+import { type VariantProps } from "class-variance-authority";
+
+const variants = cva("base", {
+  variants: {
+    /* */
+  },
+});
+
+interface ComponentProps
+  extends React.HTMLAttributes<HTMLDivElement>,
+    VariantProps<typeof variants> {
+  // Additional props
+}
+```
+
+## Best Practices
+
+- Use strict TypeScript settings (already configured)
+- Prefer `interface` over `type` for object types
+- Use `type` for unions, intersections, and computed types
+- Always type component props and function parameters
+- Use generic constraints where appropriate
+- Leverage Next.js built-in types
+- Use `satisfies` operator for type checking without widening

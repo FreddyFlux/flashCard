@@ -1,0 +1,97 @@
+---
+description: Security implementation overview and checklist
+---
+
+# 🛡️ Security Implementation Overview
+
+This is a comprehensive security checklist for implementing authentication and data isolation with Clerk.
+
+## Architecture Overview
+
+```
+User Authentication (Clerk)
+    ↓
+User owns Decks (via userId in decksTable)
+    ↓
+Decks contain Cards (via deckId foreign key)
+    ↓
+Security Model: Users → Decks → Cards
+```
+
+## Security Rule Files Reference
+
+1. **[auth-security.mdc](mdc:.cursor/rules/auth-security.mdc)** - Core authentication principles (always applies)
+2. **[api-security.mdc](mdc:.cursor/rules/api-security.mdc)** - API route security patterns
+3. **[database-security.mdc](mdc:.cursor/rules/database-security.mdc)** - Database operation security
+4. **[component-security.mdc](mdc:.cursor/rules/component-security.mdc)** - Client-side component security
+5. **[server-actions-security.mdc](mdc:.cursor/rules/server-actions-security.mdc)** - Server actions security
+
+## Key Security Implementation Points
+
+### 🔐 Authentication Flow
+
+```typescript
+import { auth } from "@clerk/nextjs/server";
+
+const { userId } = await auth();
+if (!userId) {
+  return new Response("Unauthorized", { status: 401 });
+}
+```
+
+### 🔍 Data Access Pattern
+
+```typescript
+// ✅ Always filter by authenticated user
+const userDecks = await db
+  .select()
+  .from(decksTable)
+  .where(eq(decksTable.userId, userId));
+```
+
+### 🛡️ Ownership Verification
+
+```typescript
+// ✅ Verify ownership before operations
+const deck = await db
+  .select()
+  .from(decksTable)
+  .where(and(eq(decksTable.id, deckId), eq(decksTable.userId, userId)));
+```
+
+## Pre-Implementation Security Checklist
+
+- [ ] Clerk authentication properly configured in [middleware.ts](mdc:src/middleware.ts)
+- [ ] Database schema includes `userId` fields for ownership tracking
+- [ ] All API routes implement authentication checks
+- [ ] All database operations filter by authenticated user
+- [ ] Components handle authentication states appropriately
+- [ ] Server actions include proper validation and authorization
+
+## Post-Implementation Security Verification
+
+- [ ] Cannot access other users' decks by manipulating URLs
+- [ ] Cannot access other users' cards through any route
+- [ ] API returns 401 for unauthenticated requests
+- [ ] API returns 404 for unauthorized data access attempts
+- [ ] Database queries always include user context
+- [ ] Error messages don't leak sensitive information
+
+## Common Security Vulnerabilities to Test
+
+1. **Direct object reference**: Can user access `/api/decks/123` for deck they don't own?
+2. **Authentication bypass**: What happens when auth token is missing/invalid?
+3. **Privilege escalation**: Can user modify other users' data?
+4. **Information disclosure**: Do error messages reveal sensitive data?
+5. **Input validation**: Are all inputs properly sanitized?
+
+## Emergency Security Response
+
+If a security vulnerability is discovered:
+
+1. **Immediately** revoke access to affected systems
+2. Audit logs for potential data breaches
+3. Fix the vulnerability following security rules
+4. Test the fix thoroughly
+5. Deploy the fix as priority
+6. Review similar patterns across codebase

@@ -1,0 +1,73 @@
+---
+alwaysApply: true
+---
+
+# Authentication & Data Security Rules
+
+This application uses **Clerk** for authentication and must enforce strict data isolation between users.
+
+## 🚨 CRITICAL SECURITY PRINCIPLES
+
+### 1. User Data Isolation
+
+- **NEVER** allow users to access data that doesn't belong to them
+- **ALWAYS** filter database queries by the authenticated user's ID
+- Every data operation must verify user ownership before proceeding
+
+### 2. Required Authentication Checks
+
+```typescript
+// ✅ ALWAYS do this in API routes and server actions
+import { auth } from "@clerk/nextjs/server";
+
+const { userId } = await auth();
+if (!userId) {
+  return new Response("Unauthorized", { status: 401 });
+}
+```
+
+### 3. Database Query Security Pattern
+
+```typescript
+// ✅ CORRECT: Filter by userId
+const userDecks = await db
+  .select()
+  .from(decksTable)
+  .where(eq(decksTable.userId, userId));
+
+// ❌ NEVER do this - exposes all users' data
+const allDecks = await db.select().from(decksTable);
+```
+
+### 4. Ownership Verification for Related Data
+
+```typescript
+// ✅ CORRECT: Verify deck ownership before accessing cards
+const deck = await db
+  .select()
+  .from(decksTable)
+  .where(and(eq(decksTable.id, deckId), eq(decksTable.userId, userId)))
+  .limit(1);
+
+if (!deck.length) {
+  return new Response("Deck not found", { status: 404 });
+}
+
+// Now safe to query cards for this deck
+const cards = await db
+  .select()
+  .from(cardsTable)
+  .where(eq(cardsTable.deckId, deckId));
+```
+
+## Database Schema Reference
+
+- **decksTable**: Contains `userId` field linking to Clerk user ID
+- **cardsTable**: Linked to decks via `deckId` foreign key
+- Security model: Users own decks → decks contain cards
+
+## Key Files
+
+- Authentication middleware: [middleware.ts](mdc:src/middleware.ts)
+- Database schema: [schema.ts](mdc:src/db/schema.ts)
+- Database connection: [index.ts](mdc:src/db/index.ts)

@@ -1,0 +1,108 @@
+---
+globs: *.tsx
+description: Tailwind CSS and styling conventions
+---
+
+# Styling Guidelines
+
+## Tailwind CSS v4 Conventions
+
+- Use CSS variables for theming (configured in `globals.css`)
+- Prefer utility classes over custom CSS
+- Use the `cn()` utility from `@/lib/utils` for conditional classes
+
+## Class Organization
+
+```tsx
+// Order classes by category: layout → spacing → sizing → styling → effects
+<div className={cn(
+  // Layout
+  "flex items-center justify-between",
+  // Spacing
+  "px-4 py-2 gap-2",
+  // Sizing
+  "w-full h-auto",
+  // Styling
+  "bg-background text-foreground border rounded-md",
+  // Effects
+  "shadow-sm hover:shadow-md transition-shadow",
+  // Conditional classes
+  isActive && "bg-primary text-primary-foreground",
+  className // Always last for override capability
+)}>
+```
+
+## Color System (CSS Variables)
+
+```css
+/* Use semantic color tokens */
+bg-background          /* Page background */
+bg-card               /* Card backgrounds */
+bg-primary            /* Primary actions */
+bg-secondary          /* Secondary actions */
+bg-muted              /* Subtle backgrounds */
+bg-destructive        /* Error states */
+
+text-foreground       /* Default text */
+text-muted-foreground /* Subtle text */
+text-primary          /* Primary text */
+```
+
+## Component Styling Patterns
+
+```tsx
+// Base component with variants
+const Button = forwardRef<HTMLButtonElement, ButtonProps>(
+  ({ className, variant = "default", size = "default", ...props }, ref) => {
+    return (
+      <button
+        className={cn(buttonVariants({ variant, size, className }))}
+        ref={ref}
+        {...props}
+      />
+    )
+  }
+)
+
+// Conditional styling
+<div className={cn(
+  "base-classes",
+  {
+    "active-classes": isActive,
+    "disabled-classes": isDisabled,
+  }
+)}>
+```
+
+## Responsive Design
+
+```tsx
+// Mobile-first approach
+<div className={cn(
+  "text-sm md:text-base lg:text-lg",      // Typography
+  "p-2 md:p-4 lg:p-6",                   // Spacing
+  "grid-cols-1 md:grid-cols-2 lg:grid-cols-3", // Layout
+)}>
+```
+
+## Animation & Interactions
+
+```tsx
+// Use Tailwind's built-in transitions
+<button className={cn(
+  "transition-all duration-200 ease-in-out",
+  "hover:scale-105 hover:shadow-lg",
+  "focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2",
+  "active:scale-95"
+)}>
+```
+
+## Best Practices
+
+- Use semantic color tokens instead of arbitrary colors
+- Group related classes together for readability
+- Always provide `className` prop for component customization
+- Use `cn()` for all conditional class logic
+- Follow mobile-first responsive design principles
+- Maintain consistent spacing scale (4px increments)
+- Test dark mode compatibility with CSS variable system

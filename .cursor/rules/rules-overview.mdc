@@ -1,0 +1,70 @@
+---
+alwaysApply: false
+description: Overview of all Cursor rules for this project
+---
+
+# Cursor Rules Overview
+
+This project has several Cursor rules to help maintain consistency and follow best practices.
+
+## Active Rules
+
+### 1. Project Structure (`project-structure.mdc`)
+
+- **Applies**: Always (alwaysApply: true)
+- **Purpose**: Provides overview of project structure, key files, and technology stack
+- **Key Info**: Next.js 15, shadcn/ui config, import aliases, file organization
+
+### 2. shadcn/ui Components (`shadcn-components.mdc`)
+
+- **Applies**: To .tsx files
+- **Purpose**: Guidelines for using shadcn/ui components effectively
+- **Covers**: Component installation, usage patterns, styling utilities, best practices
+
+### 3. Next.js Conventions (`nextjs-conventions.mdc`)
+
+- **Applies**: To .tsx and .ts files
+- **Purpose**: Next.js App Router patterns and conventions
+- **Covers**: File-based routing, Server/Client components, data fetching, metadata
+
+### 4. TypeScript Conventions (`typescript-conventions.mdc`)
+
+- **Applies**: To .ts and .tsx files
+- **Purpose**: TypeScript patterns and type definitions
+- **Covers**: Component types, Next.js specific types, utility types, best practices
+
+### 5. Styling Guidelines (`styling-guidelines.mdc`)
+
+- **Applies**: To .tsx files
+- **Purpose**: Tailwind CSS and styling conventions
+- **Covers**: Class organization, color system, responsive design, animations
+
+### 6. Database Interactions (`database-interactions.mdc`)
+
+- **Applies**: Always (alwaysApply: true)
+- **Purpose**: Enforces consistent use of Drizzle ORM for all database operations
+- **Covers**: Schema imports, query patterns, type safety, CRUD operations, error handling
+
+### 7. Data Operations (`data-operations.mdc`)
+
+- **Applies**: Always (alwaysApply: true)
+- **Purpose**: Enforces architectural patterns for data flow using server components and server actions
+- **Covers**: Server component data fetching, server action mutations, Zod validation, TypeScript types
+
+## Usage Tips
+
+- Rules are automatically loaded when working on matching file types
+- The project structure rule is always active to provide context
+- Use `@/` aliases consistently as defined in the project structure rule
+- Follow the established patterns for new components and pages
+- Refer to these rules when asking for code assistance or reviews
+
+## Customization
+
+To modify these rules:
+
+1. Edit the `.mdc` files in the `.cursor/rules/` directory
+2. Update the frontmatter metadata to change when rules apply
+3. Add new rules by creating additional `.mdc` files
+
+These rules work together to ensure consistent code quality and maintainability across the project.
